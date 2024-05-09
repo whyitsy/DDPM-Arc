@@ -1,6 +1,4 @@
-# Clone的这个仓库：[DDPM]("https://github.com/zoubohao/DenoisingDiffusionProbabilityModel-ddpm-.git")
-
-N卡Clone后直接运行即可。
+Clone的这个仓库：[DDPM]("https://github.com/zoubohao/DenoisingDiffusionProbabilityModel-ddpm-.git")。N卡Clone后直接运行即可。
 
 # DDPM-Arc
 
