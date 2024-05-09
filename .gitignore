@@ -1,0 +1,5 @@
+CIFAR10/
+Checkpoints/
+CheckpointsCondition/
+
+**pycache**
