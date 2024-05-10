@@ -11,7 +11,10 @@ def extract(v, t, x_shape):
     [batch_size, 1, 1, 1, 1, ...] for broadcasting purposes.
     """
     device = t.device
+    # 在dim=0上获取v中index=t位置的值
     out = torch.gather(v, index=t, dim=0).float().to(device)
+    # out.view将其形状改为[batch_size,1,1,1],这里的三个1维度是为了对应后面的channel，height，width。
+    # 在进行广播计算后，就能够将这一个系数应用于所有的采样点上了
     return out.view([t.shape[0]] + [1] * (len(x_shape) - 1))
 
 
@@ -19,14 +22,16 @@ class GaussianDiffusionTrainer(nn.Module):
     def __init__(self, model, beta_1, beta_T, T):
         super().__init__()
 
+        # Unet
         self.model = model
+        # 最大迭代轮数
         self.T = T
 
         self.register_buffer(
             'betas', torch.linspace(beta_1, beta_T, T).float())
-        alphas = 1. - self.betas
-        alphas_bar = torch.cumprod(alphas, dim=0)
-
+        alphas = 1. - self.betas # 一维
+        # 累乘
+        alphas_bar = torch.cumprod(alphas, dim=0) # 一维
         # calculations for diffusion q(x_t | x_{t-1}) and others
         self.register_buffer(
             'sqrt_alphas_bar', torch.sqrt(alphas_bar))
@@ -37,16 +42,20 @@ class GaussianDiffusionTrainer(nn.Module):
         """
         Algorithm 1.
         """
+        # 生成batch_size个[0,T-1]之间的随机整数。
+        # t为随机生成迭代轮数的列表
         t = torch.randint(self.T, size=(x_0.shape[0], ), device=x_0.device)
         noise = torch.randn_like(x_0)
         x_t = (
             extract(self.sqrt_alphas_bar, t, x_0.shape) * x_0 +
             extract(self.sqrt_one_minus_alphas_bar, t, x_0.shape) * noise)
+        # reduction表示如何对损失进行聚合，如返回平均、求和、不处理(返回每个值)
         loss = F.mse_loss(self.model(x_t, t), noise, reduction='none')
         return loss
 
 
 class GaussianDiffusionSampler(nn.Module):
+
     def __init__(self, model, beta_1, beta_T, T):
         super().__init__()
 
