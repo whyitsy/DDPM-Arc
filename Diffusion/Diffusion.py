@@ -30,7 +30,7 @@ class GaussianDiffusionTrainer(nn.Module):
         self.register_buffer(
             'betas', torch.linspace(beta_1, beta_T, T).float())
         alphas = 1. - self.betas # 一维
-        # 累乘
+        # 累乘, 用于一步到位计算noise
         alphas_bar = torch.cumprod(alphas, dim=0) # 一维
         # calculations for diffusion q(x_t | x_{t-1}) and others
         self.register_buffer(
@@ -47,11 +47,12 @@ class GaussianDiffusionTrainer(nn.Module):
         # t为随机生成迭代轮数的列表
         t = torch.randint(self.T, size=(x_0.shape[0], ), device=x_0.device)
         noise = torch.randn_like(x_0)
+        # 一步到位生成最终加噪后的结果
         x_t = (
             extract(self.sqrt_alphas_bar, t, x_0.shape) * x_0 +
             extract(self.sqrt_one_minus_alphas_bar, t, x_0.shape) * noise)
         # reduction表示如何对损失进行聚合，如返回平均、求和、不处理(返回每个值)
-        # 在高斯分布中随机采样的噪声就是ground truth, 我们要预测的都是高斯分布采样的随机高斯噪声。
+        # 采样得到的高斯分噪声为ground truth
         loss = F.mse_loss(self.model(x_t, t), noise, reduction='none')
         return loss
 
@@ -78,9 +79,10 @@ class GaussianDiffusionSampler(nn.Module):
         self.register_buffer('coeff1', torch.sqrt(1. / alphas)) 
         self.register_buffer('coeff2', self.coeff1 * (1. - alphas) / torch.sqrt(1. - alphas_bar))
 
-        # 用于计算方差σ_t的, 不知道为什么这么写
+        ################ 用于计算方差σ_t的, 不知道为什么这么写 ################
         # (1. - alphas_bar_prev)是小于(1. - alphas_bar)一个错位的
         self.register_buffer('posterior_var', self.betas * (1. - alphas_bar_prev) / (1. - alphas_bar))
+        ################################################################
 
     # 计算均值, 不知道为什么这个叫做均值
     def predict_xt_prev_mean_from_eps(self, x_t, t, eps):
@@ -119,7 +121,7 @@ class GaussianDiffusionSampler(nn.Module):
                 noise = torch.randn_like(x_t)
             else:
                 noise = 0
-            # Sampling算法的第四行右边第二部分 σ_t*z
+            # Sampling算法的第四行右边第二部分 σ_t*z, 加这个部分可能是为了能够正常生成图片
             x_t = mean + torch.sqrt(var) * noise
             assert torch.isnan(x_t).int().sum() == 0, "nan in tensor."
         x_0 = x_t

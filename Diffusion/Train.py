@@ -20,15 +20,13 @@ from Scheduler import GradualWarmupScheduler
 
 
 """
-因为每一次的噪声都是采样得到的, 而就算是相同的分布每次采样都不一样, 故不同分布的采样就更不一样了。
-所以只有记住每次加入的噪声, 才可以从x_t一步一步的减掉噪声还原x_0。
+从纯公式前向和逆向的角度: 因为每一次的噪声都是采样得到的, 而就算是相同的分布每次采样都不一样, 故不同分布的采样就更不一样了。
+所以只有记住每次加入的噪声, 逆向时才可以从x_t一步一步的减掉噪声还原x_0。
 
-而从理论推导出发, 前向扩散相同, 可以记下每次加入的噪声; 
-但是反向降噪是学习加入噪声的分布, 然后通过学习到的分布采样噪声, 再减掉噪声进行还原, 所以训练出来的网络是不可能百分百还原的, 只能很像原图。
-
-我们训练的网络的目的是直接利用训练好的网络从一个高斯噪声中去噪生成需要的图片。单纯的加噪和降噪百分比还原是没有意义的。
-就像1+100=101, 101-100=1一样。我们的目的是训练网络使其能够生成尽可能接近加入的100。
+而从生成模型的角度: 从x_0直接加入t步的噪声,得到x_t即为前向过程, 此时就只有一个分布的噪声。将多次采样重参数化为一次采样-重参数化技巧。
+训练时将x_t, t作为输入, 高斯noise(无系数)作为ground truth, 预测加入的高斯noise。(之前一直以为是直接预测带系数的noise)
 """
+
 def train(modelConfig: Dict):
     device = torch.device(modelConfig["device"])
     # dataset
@@ -49,8 +47,7 @@ def train(modelConfig: Dict):
     net_model = UNet(T=modelConfig["T"], ch=modelConfig["channel"], ch_mult=modelConfig["channel_mult"], attn=modelConfig["attn"],
                      num_res_blocks=modelConfig["num_res_blocks"], dropout=modelConfig["dropout"]).to(device)
     
-
-    # 加载权重
+    # 加载权重, 如果设置了
     if modelConfig["training_load_weight"] is not None:
         net_model.load_state_dict(torch.load(os.path.join(
             modelConfig["save_weight_dir"], modelConfig["training_load_weight"]), map_location=device))
@@ -99,7 +96,7 @@ def train(modelConfig: Dict):
                 torch.nn.utils.clip_grad_norm_(
                     net_model.parameters(), modelConfig["grad_clip"])
                 optimizer.step()
-                # 动态更新每个batch后的数据
+                # 动态更新每个batch后显示的数据
                 tqdmDataLoader.set_postfix(ordered_dict={
                     "epoch": e,
                     "loss: ": loss.item(),
@@ -125,7 +122,7 @@ def eval(modelConfig: Dict):
         model.eval()
         sampler = GaussianDiffusionSampler(
             model, modelConfig["beta_1"], modelConfig["beta_T"], modelConfig["T"]).to(device)
-        # Sampled from standard normal distribution
+        # 采样分辨率较小的高斯噪声
         noisyImage = torch.randn(
             size=[modelConfig["batch_size"], 3, 32, 32], device=device)
         # 高斯分布在三个标准差范围内[-3,3]的概率为99.7%。经过noisyImage * 0.5 + 0.5之后为N(0.5,0.25),绝大多数在[-0.25,1.25]
