@@ -19,6 +19,16 @@ from Diffusion.Model import UNet
 from Scheduler import GradualWarmupScheduler
 
 
+"""
+因为每一次的噪声都是采样得到的, 而就算是相同的分布每次采样都不一样, 故不同分布的采样就更不一样了。
+所以只有记住每次加入的噪声, 才可以从x_t一步一步的减掉噪声还原x_0。
+
+而从理论推导出发, 前向扩散相同, 可以记下每次加入的噪声; 
+但是反向降噪是学习加入噪声的分布, 然后通过学习到的分布采样噪声, 再减掉噪声进行还原, 所以训练出来的网络是不可能百分百还原的, 只能很像原图。
+
+我们训练的网络的目的是直接利用训练好的网络从一个高斯噪声中去噪生成需要的图片。单纯的加噪和降噪百分比还原是没有意义的。
+就像1+100=101, 101-100=1一样。我们的目的是训练网络使其能够生成尽可能接近加入的100。
+"""
 def train(modelConfig: Dict):
     device = torch.device(modelConfig["device"])
     # dataset
@@ -122,11 +132,13 @@ def eval(modelConfig: Dict):
         # clamp函数(input,min,max),将[-0.25,1.25]内的值限制在了[0,1]
         # 而为什么要限制在[0,1]? 一般激活函数（如ReLU）和梯度下降算法效果会更好，减少梯度爆炸的风险。图像数据通常需要在 [0, 1] 范围内才能正确显示。
         saveNoisy = torch.clamp(noisyImage * 0.5 + 0.5, 0, 1)
+        # 保存随机采样的高斯噪声图片
         save_image(saveNoisy, os.path.join(
             modelConfig["sampled_dir"], modelConfig["sampledNoisyImgName"]), nrow=modelConfig["nrow"])
         
-        
+        # sampler返回生成的图像, 像素值被缩放到[-1,1]
         sampledImgs = sampler(noisyImage)
+        # 缩放到[0,1], 便于保存
         sampledImgs = sampledImgs * 0.5 + 0.5  # [0 ~ 1]
         save_image(sampledImgs, os.path.join(
             modelConfig["sampled_dir"],  modelConfig["sampledImgName"]), nrow=modelConfig["nrow"])

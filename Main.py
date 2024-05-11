@@ -35,7 +35,7 @@ def main(model_config = None):
         "training_load_weight": None,
         "save_weight_dir": "./Checkpoints/",
         # "test_load_weight": "ckpt_199_.pt",
-        "test_load_weight": "ckpt_1_.pt",
+        "test_load_weight": "ckpt_136_.pt",
         "sampled_dir": "./SampledImgs/",
         "sampledNoisyImgName": "NoisyNoGuidenceImgs.png",
         "sampledImgName": "SampledNoGuidenceImgs.png",
