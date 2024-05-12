@@ -1,9 +1,7 @@
 import os
 from typing import Dict
 
-
 import intel_extension_for_pytorch as ipex
-
 
 import torch
 import torch.optim as optim
@@ -122,7 +120,7 @@ def eval(modelConfig: Dict):
         model.eval()
         sampler = GaussianDiffusionSampler(
             model, modelConfig["beta_1"], modelConfig["beta_T"], modelConfig["T"]).to(device)
-        # 采样分辨率较小的高斯噪声
+        # CIFAR10图像分辨率是32*32
         noisyImage = torch.randn(
             size=[modelConfig["batch_size"], 3, 32, 32], device=device)
         # 高斯分布在三个标准差范围内[-3,3]的概率为99.7%。经过noisyImage * 0.5 + 0.5之后为N(0.5,0.25),绝大多数在[-0.25,1.25]

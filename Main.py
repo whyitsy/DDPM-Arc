@@ -13,12 +13,12 @@ grad_clip这里是第一次遇见,是新技术吗(可能是最近几年的新技
 
 def main(model_config = None):
     modelConfig = {
-        "state": "eval", # or eval
+        "state": "train", # or eval
         "epoch": 200,
         "batch_size": 80,
         "T": 1000,  # 用于扩散的次数上限，max
-        "channel": 128,
-        "channel_mult": [1, 2, 3, 4],
+        "channel": 128, # basechannel, Unet每次下采样后的channel数都是上一次的倍数, 所以用一个basechannel方便表示
+        "channel_mult": [1, 2, 3, 4], # Unet每次下采样后的channel数, 用basechannel的倍数表示
         "attn": [2],
         "num_res_blocks": 2,
         "dropout": 0.15, 
@@ -32,7 +32,8 @@ def main(model_config = None):
         # "device": "cuda:0", ### MAKE SURE YOU HAVE A GPU !!!
         "device":"xpu",
         ############ change ############
-        "training_load_weight": None,
+        # "training_load_weight": None,
+        "training_load_weight": "ckpt_136_.pt",
         "save_weight_dir": "./Checkpoints/",
         # "test_load_weight": "ckpt_199_.pt",
         "test_load_weight": "ckpt_136_.pt",

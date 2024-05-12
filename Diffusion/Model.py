@@ -1,5 +1,3 @@
-
-   
 import math
 import torch
 from torch import nn
@@ -7,6 +5,8 @@ from torch.nn import init
 from torch.nn import functional as F
 
 
+# Swish激活函数, Google在17年提出。一般优于传统激活函数, 如Relu
+# 这时是无参数的版本, 还有一个存在一个参数的Swish-B。
 class Swish(nn.Module):
     def forward(self, x):
         return x * torch.sigmoid(x)
@@ -167,18 +167,25 @@ class UNet(nn.Module):
         tdim = ch * 4
         self.time_embedding = TimeEmbedding(T, ch, tdim)
 
+        # 有padding的改进Unet, 不改变图片的尺寸
         self.head = nn.Conv2d(3, ch, kernel_size=3, stride=1, padding=1)
         self.downblocks = nn.ModuleList()
+
+        # 记录下采样时输出的channel数, 用于上采样时进行拼接
         chs = [ch]  # record output channel when dowmsample for upsample
         now_ch = ch
+        # 搭建整体网络架构
         for i, mult in enumerate(ch_mult):
             out_ch = ch * mult
             for _ in range(num_res_blocks):
+                # 下采样
                 self.downblocks.append(ResBlock(
                     in_ch=now_ch, out_ch=out_ch, tdim=tdim,
                     dropout=dropout, attn=(i in attn)))
                 now_ch = out_ch
                 chs.append(now_ch)
+
+            # 不是最后一个
             if i != len(ch_mult) - 1:
                 self.downblocks.append(DownSample(now_ch))
                 chs.append(now_ch)

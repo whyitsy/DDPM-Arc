@@ -3,7 +3,7 @@ from DiffusionFreeGuidence.TrainCondition import train, eval
 
 def main(model_config=None):
     modelConfig = {
-        "state": "train", # or eval
+        "state": "eval", # train or eval
         "epoch": 70,
         "batch_size": 80,
         "T": 500,
@@ -17,11 +17,11 @@ def main(model_config=None):
         "beta_T": 0.028,
         "img_size": 32,
         "grad_clip": 1.,
-        "device": "cuda:0",
+        "device": "xpu",
         "w": 1.8,
         "save_dir": "./CheckpointsCondition/",
         "training_load_weight": None,
-        "test_load_weight": "ckpt_63_.pt",
+        "test_load_weight": "ckpt_0_.pt",
         "sampled_dir": "./SampledImgs/",
         "sampledNoisyImgName": "NoisyGuidenceImgs.png",
         "sampledImgName": "SampledGuidenceImgs.png",
