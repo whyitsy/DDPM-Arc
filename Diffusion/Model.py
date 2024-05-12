@@ -47,6 +47,7 @@ class TimeEmbedding(nn.Module):
 class DownSample(nn.Module):
     def __init__(self, in_ch):
         super().__init__()
+        # 下采样不改变channel, 只是将长宽减半
         self.main = nn.Conv2d(in_ch, in_ch, 3, stride=2, padding=1)
         self.initialize()
 
@@ -58,7 +59,7 @@ class DownSample(nn.Module):
         x = self.main(x)
         return x
 
-
+# 上采样使用的最近邻插值加倍图像尺寸, 然后再卷积。与下采样对应相加之后就可以再接上采样了。
 class UpSample(nn.Module):
     def __init__(self, in_ch):
         super().__init__()
@@ -71,6 +72,7 @@ class UpSample(nn.Module):
 
     def forward(self, x, temb):
         _, _, H, W = x.shape
+        # 插值算法, nearest: 最近邻插值算法
         x = F.interpolate(
             x, scale_factor=2, mode='nearest')
         x = self.main(x)
@@ -115,34 +117,48 @@ class AttnBlock(nn.Module):
         return x + h
 
 
+
 class ResBlock(nn.Module):
     def __init__(self, in_ch, out_ch, tdim, dropout, attn=False):
         super().__init__()
+
         self.block1 = nn.Sequential(
+            # GroupNorm是BN的一种泛化。输入通道被分成多个组，每组内的通道使用相同的归一化参数进行归一化。
+            # GroupNorm特别适用于小批量大小的情况，Batch Normalization 可能无法有效地工作，因为批量统计信息的估计不够准确。
+            # 注意in_ch需要是32的倍数
             nn.GroupNorm(32, in_ch),
             Swish(),
             nn.Conv2d(in_ch, out_ch, 3, stride=1, padding=1),
         )
+
+        # temb投影到out_ch的维度。相同维度才能直接相加
         self.temb_proj = nn.Sequential(
             Swish(),
             nn.Linear(tdim, out_ch),
         )
+
         self.block2 = nn.Sequential(
             nn.GroupNorm(32, out_ch),
             Swish(),
             nn.Dropout(dropout),
             nn.Conv2d(out_ch, out_ch, 3, stride=1, padding=1),
         )
+
+        # 1x1卷积调整输入和输出通道不同
         if in_ch != out_ch:
             self.shortcut = nn.Conv2d(in_ch, out_ch, 1, stride=1, padding=0)
+        # 如果相同则直接通过, 不作操作
         else:
             self.shortcut = nn.Identity()
+
+        # 如果包含注意力机制，则添加AttnBlock
         if attn:
             self.attn = AttnBlock(out_ch)
         else:
             self.attn = nn.Identity()
         self.initialize()
 
+    # 初始化权重和偏置
     def initialize(self):
         for module in self.modules():
             if isinstance(module, (nn.Conv2d, nn.Linear)):
@@ -152,9 +168,12 @@ class ResBlock(nn.Module):
 
     def forward(self, x, temb):
         h = self.block1(x)
+        # 后面[:, :, None, None]是对temb_proj的结果进行reshape, 后面的None就是占位用的, 表示获取所有一维和二维数据, 在扩展三维和四维=>[batch_size, out_ch, 1, 1] 
+        # 这样后就可以广播为[batch_size, out_ch, H, W]的tensor. 这是常用的扩展维度的方法
         h += self.temb_proj(temb)[:, :, None, None]
         h = self.block2(h)
 
+        # 这里就是残差连接的体现
         h = h + self.shortcut(x)
         h = self.attn(h)
         return h
