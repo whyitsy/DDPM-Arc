@@ -13,7 +13,7 @@ grad_clip这里是第一次遇见,是新技术吗(可能是最近几年的新技
 
 def main(model_config = None):
     modelConfig = {
-        "state": "train", # or eval
+        "state": "eval", # or eval
         "epoch": 200,
         "batch_size": 80,
         "T": 1000,  # 用于扩散的次数上限，max
