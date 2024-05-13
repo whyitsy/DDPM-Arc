@@ -4,6 +4,8 @@ from Diffusion.Train import train, eval
 # 使用4080，5.7it/s
 
 """问题：
+参考文章之一: https://juejin.cn/post/7258069406961352764
+
 这里使用dropout是有什么原因吗,现在一般不都是使用BN吗?
 grad_clip这里是第一次遇见,是新技术吗(可能是最近几年的新技术,而我并没有)
 

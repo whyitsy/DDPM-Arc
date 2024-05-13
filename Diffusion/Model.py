@@ -22,7 +22,8 @@ class TimeEmbedding(nn.Module):
     def __init__(self, T, d_model, dim):
         """
         T: 扩散的次数, 这里是建立好max_step的map, 后面的随机step就可以直接获取对应step的temb
-        d_model: embedding的维度
+        d_model: 输入的维度, 在该维度上进行embedding
+        dim: embedding后经过linear输出的维度。 dim = d_model * 4 
         """
         assert d_model % 2 == 0
         super().__init__()
@@ -49,6 +50,7 @@ class TimeEmbedding(nn.Module):
 
         self.timembedding = nn.Sequential(
             nn.Embedding.from_pretrained(emb),
+            # 为什么有要通过linear层放大四倍channel？
             nn.Linear(d_model, dim),
             Swish(),
             nn.Linear(dim, dim),
@@ -153,6 +155,9 @@ class ResBlock(nn.Module):
     这个结构是参考 https://juejin.cn/post/7251391372394053691  , 具体是哪里提出来的不知道
     """
     def __init__(self, in_ch, out_ch, tdim, dropout, attn=False):
+        """
+        tdim: 
+        """
         super().__init__()
 
         # block1是原版变化, 改变channel
@@ -220,11 +225,12 @@ class ResBlock(nn.Module):
         h = self.attn(h)
         return h
 
-
+# 整体结构可以看Main.py的参考文章
 class UNet(nn.Module):
     def __init__(self, T, ch, ch_mult, attn, num_res_blocks, dropout):
         super().__init__()
         assert all([i < len(ch_mult) for i in attn]), 'attn index out of bound'
+        # 为什么
         tdim = ch * 4
         self.time_embedding = TimeEmbedding(T, ch, tdim)
 
@@ -242,7 +248,7 @@ class UNet(nn.Module):
                 # 下采样
                 self.downblocks.append(ResBlock(
                     in_ch=now_ch, out_ch=out_ch, tdim=tdim,
-                    dropout=dropout, attn=(i in attn)))
+                    dropout=dropout, attn=(i in attn))) # 如果i==2就添加Attention
                 now_ch = out_ch
                 chs.append(now_ch)
 
@@ -251,6 +257,7 @@ class UNet(nn.Module):
                 self.downblocks.append(DownSample(now_ch))
                 chs.append(now_ch)
 
+        # 最下面
         self.middleblocks = nn.ModuleList([
             ResBlock(now_ch, now_ch, tdim, dropout, attn=True),
             ResBlock(now_ch, now_ch, tdim, dropout, attn=False),
@@ -259,6 +266,7 @@ class UNet(nn.Module):
         self.upblocks = nn.ModuleList()
         for i, mult in reversed(list(enumerate(ch_mult))):
             out_ch = ch * mult
+            # decoder每一层多一个ResBlock
             for _ in range(num_res_blocks + 1):
                 self.upblocks.append(ResBlock(
                     in_ch=chs.pop() + now_ch, out_ch=out_ch, tdim=tdim,
@@ -296,6 +304,8 @@ class UNet(nn.Module):
         # Upsampling
         for layer in self.upblocks:
             if isinstance(layer, ResBlock):
+                # 上采样UpSample是直接倍增分辨率, 不改变channel
+                # 之后横向每次ResBlock都是先加上Encoder对应的部分在处理
                 h = torch.cat([h, hs.pop()], dim=1)
             h = layer(h, temb)
         h = self.tail(h)
