@@ -5,26 +5,48 @@ from torch.nn import init
 from torch.nn import functional as F
 
 
-# Swish激活函数, Google在17年提出。一般优于传统激活函数, 如Relu
-# 这时是无参数的版本, 还有一个存在一个参数的Swish-B。
 class Swish(nn.Module):
+    """
+    Swish激活函数, Google在17年提出。一般优于传统激活函数, 如Relu
+    这时是无参数的版本, 还有一个存在一个参数的Swish-B。
+    """
     def forward(self, x):
         return x * torch.sigmoid(x)
 
 
 class TimeEmbedding(nn.Module):
+    """
+    TimeEmbedding模块将把整型t, 以Transformer函数式位置编码的方式, 映射成向量
+    其shape为(batch_size, time_channel)
+    """
     def __init__(self, T, d_model, dim):
+        """
+        T: 扩散的次数, 这里是建立好max_step的map, 后面的随机step就可以直接获取对应step的temb
+        d_model: embedding的维度
+        """
         assert d_model % 2 == 0
         super().__init__()
-        emb = torch.arange(0, d_model, step=2) / d_model * math.log(10000)
+
+        # embedding编码, 同Transformer的Positional encoding
+        ##### i/{ 10000^{2*j/d} } ###############
+        # 这里只计算了一半, 另一半通过stack合并。 计算应该也能够使用pow
+        emb = torch.arange(0, d_model, step=2) / d_model * math.log(10000) 
         emb = torch.exp(-emb)
         pos = torch.arange(T).float()
+        # 这里通过广播建立一个所有step的temb的map, 一次Unet一个temb
         emb = pos[:, None] * emb[None, :]
         assert list(emb.shape) == [T, d_model // 2]
+        #########################################
+
+        # stack用于将多个tensor合并为一个tensor, 按照dim扩展新的维度
+        # emb只包含了一半, 使用stack合并每一个emb的sin、cos就能得到每两个编码一组的列表, 奇数和偶数
         emb = torch.stack([torch.sin(emb), torch.cos(emb)], dim=-1)
         assert list(emb.shape) == [T, d_model // 2, 2]
+
+        # 最后将列表打开合并, 结果就是相邻的一组奇数和偶数的sin、cos的参数相同
         emb = emb.view(T, d_model)
 
+        
         self.timembedding = nn.Sequential(
             nn.Embedding.from_pretrained(emb),
             nn.Linear(d_model, dim),
@@ -59,8 +81,10 @@ class DownSample(nn.Module):
         x = self.main(x)
         return x
 
-# 上采样使用的最近邻插值加倍图像尺寸, 然后再卷积。与下采样对应相加之后就可以再接上采样了。
 class UpSample(nn.Module):
+    """
+    上采样使用的最近邻插值加倍图像尺寸, 然后再卷积。与下采样对应相加之后就可以再接上采样了。
+    """
     def __init__(self, in_ch):
         super().__init__()
         self.main = nn.Conv2d(in_ch, in_ch, 3, stride=1, padding=1)
@@ -98,6 +122,7 @@ class AttnBlock(nn.Module):
     def forward(self, x):
         B, C, H, W = x.shape
         h = self.group_norm(x)
+        # 自注意力
         q = self.proj_q(h)
         k = self.proj_k(h)
         v = self.proj_v(h)
@@ -117,10 +142,11 @@ class AttnBlock(nn.Module):
         return x + h
 
 
-
-# 在初版Unet中, 这里就只是ResBlock中的block1。而这里需要加入temb和使用Attention, 所以使用残差连接来确保不会丢失之前学习到的信息
-# 这个结构是参考 https://juejin.cn/post/7251391372394053691  , 具体是哪里提出来的不知道
 class ResBlock(nn.Module):
+    """
+    在初版Unet中, 这里就只是ResBlock中的block1。而这里需要加入temb和使用Attention, 并且Encoder和decoder都需要使用。
+    这个结构是参考 https://juejin.cn/post/7251391372394053691  , 具体是哪里提出来的不知道
+    """
     def __init__(self, in_ch, out_ch, tdim, dropout, attn=False):
         super().__init__()
 
@@ -185,7 +211,7 @@ class ResBlock(nn.Module):
 
         # 残差连接
         h = h + self.shortcut(x)
-        
+
         h = self.attn(h)
         return h
 
