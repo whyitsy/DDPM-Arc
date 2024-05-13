@@ -118,9 +118,19 @@ class AttnBlock(nn.Module):
 
 
 
+# 在初版Unet中, 这里就只是ResBlock中的block1。而这里需要加入temb和使用Attention, 所以使用残差连接来确保不会丢失之前学习到的信息
+# 这个结构是参考 https://juejin.cn/post/7251391372394053691  , 具体是哪里提出来的不知道
 class ResBlock(nn.Module):
     def __init__(self, in_ch, out_ch, tdim, dropout, attn=False):
         super().__init__()
+
+        # block1是原版变化, 改变channel
+        # 然后temb_proj对temb进行投影, 对齐channel数, 为[batch,ch]维度。投影后还需要扩展两个维度然后使用广播和图片[batch_size, out_ch, H, W]相加
+        # 相加之后在进行一次卷积, 对应block2
+        # 然后残差连接原图x
+        # 最后进行Attention, 如果有的话
+
+        ## 但是为什么是这个结构呢？
 
         self.block1 = nn.Sequential(
             # GroupNorm是BN的一种泛化。输入通道被分成多个组，每组内的通道使用相同的归一化参数进行归一化。
@@ -173,8 +183,9 @@ class ResBlock(nn.Module):
         h += self.temb_proj(temb)[:, :, None, None]
         h = self.block2(h)
 
-        # 这里就是残差连接的体现
+        # 残差连接
         h = h + self.shortcut(x)
+        
         h = self.attn(h)
         return h
 
