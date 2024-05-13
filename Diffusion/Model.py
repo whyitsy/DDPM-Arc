@@ -46,7 +46,7 @@ class TimeEmbedding(nn.Module):
         # 最后将列表打开合并, 结果就是相邻的一组奇数和偶数的sin、cos的参数相同
         emb = emb.view(T, d_model)
 
-        
+
         self.timembedding = nn.Sequential(
             nn.Embedding.from_pretrained(emb),
             nn.Linear(d_model, dim),
@@ -127,11 +127,15 @@ class AttnBlock(nn.Module):
         k = self.proj_k(h)
         v = self.proj_v(h)
 
+        # 调整维度, 用以矩阵乘法
         q = q.permute(0, 2, 3, 1).view(B, H * W, C)
         k = k.view(B, C, H * W)
+        # 矩阵乘法,  (int(C) ** (-0.5))是后面沿着channel做Attention时的缩放
         w = torch.bmm(q, k) * (int(C) ** (-0.5))
         assert list(w.shape) == [B, H * W, H * W]
-        w = F.softmax(w, dim=-1)
+        # 这个概率就是注意力分数了吧！
+        w = F.softmax(w, dim=-1) 
+
 
         v = v.permute(0, 2, 3, 1).view(B, H * W, C)
         h = torch.bmm(w, v)
@@ -139,6 +143,7 @@ class AttnBlock(nn.Module):
         h = h.view(B, H, W, C).permute(0, 3, 1, 2)
         h = self.proj(h)
 
+        # additive attention
         return x + h
 
 
