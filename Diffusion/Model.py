@@ -47,8 +47,8 @@ class TimeEmbedding(nn.Module):
         # 最后将列表打开合并, 结果就是相邻的一组奇数和偶数的sin、cos的参数相同
         emb = emb.view(T, d_model)
 
-
         self.timembedding = nn.Sequential(
+            
             nn.Embedding.from_pretrained(emb),
             # 为什么有要通过linear层放大四倍channel？
             nn.Linear(d_model, dim),

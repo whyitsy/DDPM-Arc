@@ -1,5 +1,3 @@
-
-   
 import math
 from telnetlib import PRAGMA_HEARTBEAT
 import torch
@@ -35,6 +33,7 @@ class TimeEmbedding(nn.Module):
         emb = emb.view(T, d_model)
 
         self.timembedding = nn.Sequential(
+            # 使用已有的emb矩阵初始化Embedding层。因为这里使用正弦余弦的编码已经准备好了。
             nn.Embedding.from_pretrained(emb, freeze=False),
             nn.Linear(d_model, dim),
             Swish(),
@@ -51,6 +50,9 @@ class ConditionalEmbedding(nn.Module):
         assert d_model % 2 == 0
         super().__init__()
         self.condEmbedding = nn.Sequential(
+            # arg1为生成的编码个数, arg2为每个编码的维度, arg3为填充下标索引(指定索引值默认填充0)
+            # CIFAR10的label为0-9, 之前处理加1为1-10,这里生成11个编码。label的值就对应生成的编码的下标, 所以需要生成11个, 最后一个对应下标10
+            # 所以使用下标为1-10的编码, 然后使用padding_idx将第0个置为0
             nn.Embedding(num_embeddings=num_labels + 1, embedding_dim=d_model, padding_idx=0),
             nn.Linear(d_model, dim),
             Swish(),
